@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.stats as sps
 from tqdm.notebook import tqdm
+from collections import deque
 rng = np.random.default_rng()
 
 
@@ -51,15 +52,29 @@ class RandomGraph:
         size = 1 if multivariate else self.N
         self.fields = distribution.rvs(size=size)
         
+    def __bfs(self, root, beta):
+        q = deque()
+        self.__visited[root] = True
+        q.append((float('nan'), root))
+        while q:
+            prev_field, node = q.popleft()
+            if np.isnan(prev_field):
+                self.fields[node] = self.__initial[node]
+            else:
+                self.fields[node] = prev_field * beta + self.__initial[node] * np.sqrt(1 - beta ** 2)
+            for neighbour in self.connections[node]:
+                if not self.__visited[neighbour]:
+                    self.__visited[neighbour] = True
+                    q.append((self.fields[node], neighbour))
+        
+    
     def sample_correlated(self, beta=1):
-        primary = sps.norm.rvs(size=self.N)
-        self.fields = beta * primary
+        self.__visited = [False] * self.N
+        self.__initial = sps.norm.rvs(size=self.N)
+        self.fields = np.zeros(self.N)
         for i in range(self.N):
-            links = 0
-            for neighbour in self.connections[i]:
-                links += primary[neighbour]
-            if self.connections[i]:
-                self.fields[i] += links * np.sqrt((1 - beta ** 2) / len(self.connections[i]))                
+            if not self.__visited[i]:
+                self.__bfs(i, beta)
 
     def __get_noise(self, noise_distr):
         self.noise = noise_distr.rvs(size=(2, self.N))
