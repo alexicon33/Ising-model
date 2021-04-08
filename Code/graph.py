@@ -5,6 +5,22 @@ from collections import deque
 rng = np.random.default_rng()
 
 
+def get_close_vector(v, alpha):
+    '''
+    Parameters:
+    v: numpy vector
+    alpha: float, -1 <= alpha <= 1
+    Generates a random unit vector u,
+    such that <u, v> = alpha. 
+    '''
+    unit = sps.norm.rvs(size=v.size)
+    unit /= np.linalg.norm(unit)
+    orth = unit - np.dot(unit, v) * v
+    orth /= np.linalg.norm(orth)
+    return alpha * v + (1 - alpha) * orth
+
+
+
 class RandomGraph:
     def __init__(self, N=1000, distr=sps.poisson(4)):
         self.N = N
@@ -52,29 +68,29 @@ class RandomGraph:
         size = 1 if multivariate else self.N
         self.fields = distribution.rvs(size=size)
         
-    def __bfs(self, root, beta):
+    def __bfs(self, root, alpha):
         q = deque()
         self.__visited[root] = True
         q.append((float('nan'), root))
         while q:
-            prev_field, node = q.popleft()
-            if np.isnan(prev_field):
-                self.fields[node] = self.__initial[node]
+            parent, node = q.popleft()
+            if np.isnan(parent):
+                self.__vectors[node] = sps.norm.rvs(size=self.N)
+                self.__vectors[node] /= np.linalg.norm(self.__vectors[node])
             else:
-                self.fields[node] = prev_field * beta + self.__initial[node] * np.sqrt(1 - beta ** 2)
+                self.__vectors[node] = get_close_vector(self.__vectors[parent], alpha)
             for neighbour in self.connections[node]:
                 if not self.__visited[neighbour]:
                     self.__visited[neighbour] = True
-                    q.append((self.fields[node], neighbour))
-        
+                    q.append((node, neighbour))
     
-    def sample_correlated(self, beta=1):
+    def __get_correlation_matrix(self, alpha):
         self.__visited = [False] * self.N
-        self.__initial = sps.norm.rvs(size=self.N)
-        self.fields = np.zeros(self.N)
+        self.__vectors = np.zeros((self.N, self.N))
         for i in range(self.N):
             if not self.__visited[i]:
-                self.__bfs(i, beta)
+                self.__bfs(i, alpha)
+        return self.__vectors @ self.__vectors.T + 0.01 * np.eye(self.N)
 
     def __get_noise(self, noise_distr):
         self.noise = noise_distr.rvs(size=(2, self.N))
@@ -131,19 +147,21 @@ class RandomGraph:
     def get_trajectories(self, J, H_grid, parameter, distr_name: str, log_hubs=False, quantile=float('nan')):
         multivariate = False
         if distr_name == 'no_distr':
-            multivariate = True
+            distribution = sps.norm(loc=0, scale=0)
         elif distr_name == 'norm': 
             distribution = sps.norm(loc=0, scale=parameter)
         elif distr_name == 'student':
             distribution = sps.t(df=parameter)
         elif distr_name == 'multivariate_norm':
             multivariate = True
-            self.sample_correlated(parameter)
+            distribution = sps.multivariate_normal(cov=self.__get_correlation_matrix(parameter))
+        elif distr_name == 'multivariate_student':
+            multivariate = True
+            distribution = sps.multivariate_t(df=3.5, shape=3/7 * self.__get_correlation_matrix(parameter))
         else:
             raise NotImplementedError('Unknown distribution')
         fractions_low_to_high, fractions_high_to_low = [], []
-        if not multivariate:
-            self.sample_fields(distribution)
+        self.sample_fields(distribution, multivariate)
         self.set_state(-np.ones(self.N))
         if not log_hubs:
             for H in H_grid:
