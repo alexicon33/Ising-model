@@ -107,14 +107,18 @@ class RandomGraph:
     def get_stable_state(self, H, J, log_hubs=False, quantile=float('nan')):
         initial_state = current_state = self.state
         next_state = self.get_next_state(H, J)
+        if np.isnan(quantile):
+            threshold = -1
+        else:
+            threshold = self.distr.ppf(quantile)
         while not np.allclose(current_state, next_state):
             current_state = next_state
             next_state = self.get_next_state(H, J)
         if log_hubs:
-            changed_hubs = 0
-            for i in range(self.N):
-                if initial_state[i] != self.state[i] and len(self.connections[i]) > self.distr.ppf(quantile):
-                    changed_hubs += 1
+            changed_hubs = np.sum(np.abs(initial_state - self.state)) / 2
+#             for i in range(self.N):
+#                 if initial_state[i] != self.state[i] and len(self.connections[i]) > threshold:
+#                     changed_hubs += 1
             return self.state, changed_hubs
         return self.state
     
