@@ -1,9 +1,28 @@
 import numpy as np
 import scipy.stats as sps
+import matplotlib.pyplot as plt
 from tqdm.notebook import tqdm
 from collections import deque
 rng = np.random.default_rng()
 
+import graph_models as gm
+
+
+def plot_trajectories(index, beta, H_grid, low_to_high, high_to_low, hubs_low=[], hubs_high=[], name=r'\beta'):
+    plt.subplot(5, 2, 2 * index + 1)
+    plt.plot(H_grid, low_to_high, label='при повышении H')
+    plt.plot(np.flip(H_grid), high_to_low, label='при снижении H')
+    plt.grid(ls=':')
+    plt.xlabel('H', fontsize='large')
+    plt.title(r'Доля вершин с $\sigma_i = 1$, ${1} = {0}$'.format(round(beta, 3), name))
+    
+    plt.subplot(5, 2, 2 * index + 2)
+    plt.bar(np.arange(H_grid.size), hubs_low, width=5, label='при повышении H')
+    plt.xticks(np.linspace(0, H_grid.size, 6), np.linspace(-H_grid.max(), H_grid.max(), 6).round(2))
+    plt.grid(ls=':')
+    plt.xlabel('H', fontsize='large')
+    plt.title(r'Количество перевернувшихся вершин, ${1} = {0}$'.format(round(beta, 3), name))
+    
 
 def get_close_vector(v, alpha):
     '''
@@ -22,10 +41,27 @@ def get_close_vector(v, alpha):
 
 
 class RandomGraph:
-    def __init__(self, N=1000, distr=sps.poisson(4)):
+    def __init__(self, N=1000, distr=sps.poisson(4), topology='random'):
         self.N = N
         self.distr = distr
         self.noise = np.zeros(N)
+        self.state = -np.ones(self.N)
+        self.topology = topology
+        if topology == 'complete':
+            self.connections = gm.complete(self.N)
+            return
+        elif topology == 'star':
+            self.connections = gm.star(self.N)
+            return
+        elif topology == 'circle':
+            self.connections = gm.circle(self.N)
+            return
+        elif topology == 'binary_tree':
+            self.connections = gm.binary_tree(self.N)
+            return
+        elif topology == 'regular':
+            # регулярный граф степени 3
+            self.distr = sps.randint(3, 4)
         degrees = distr.rvs(size=N)
         if np.sum(degrees) % 2 == 1:
             degrees = np.insert(degrees, degrees.size, 1)
@@ -98,8 +134,11 @@ class RandomGraph:
     def get_next_state(self, H, J, noise_distr=sps.bernoulli(p=0)):
         # self.__get_noise(noise_distr) Позже понадобится, но пока лишь замедляет вычисления
         utility = H + self.fields
-        for agent in range(self.N):
-            utility[agent] += J * np.sum(self.state[self.connections[agent]])
+        if self.topology == 'complete':
+            utility += J * (self.state.sum() - self.state)
+        else:
+            for agent in range(self.N):
+                utility[agent] += J * np.sum(self.state[self.connections[agent]])
         temp = utility * np.array([[-1], [1]])
         self.state = 2 * np.argmax(utility * np.array([[-1], [1]]), axis=0) - 1
         return self.state
@@ -148,7 +187,7 @@ class RandomGraph:
             return -3
         return -4
     
-    def get_trajectories(self, J, H_grid, parameter, distr_name: str, log_hubs=False, quantile=float('nan')):
+    def get_trajectories(self, J, H_grid, parameter, distr_name: str, log_hubs=False, quantile=float('nan'), matrix='hard'):
         multivariate = False
         if distr_name == 'no_distr':
             distribution = sps.norm(loc=0, scale=0)
@@ -158,7 +197,11 @@ class RandomGraph:
             distribution = sps.t(df=parameter)
         elif distr_name == 'multivariate_norm':
             multivariate = True
-            distribution = sps.multivariate_normal(cov=self.__get_correlation_matrix(parameter))
+            if matrix == 'simple':
+                cov_matrix = (1 - parameter) * np.eye(self.N) + parameter * np.ones((self.N, self.N))
+                distribution = sps.multivariate_normal(cov=cov_matrix)
+            else:
+                distribution = sps.multivariate_normal(cov=self.__get_correlation_matrix(parameter))
         elif distr_name == 'multivariate_student':
             multivariate = True
             distribution = sps.multivariate_t(df=3.5, shape=3/7 * self.__get_correlation_matrix(parameter))
