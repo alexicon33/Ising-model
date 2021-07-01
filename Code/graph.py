@@ -8,17 +8,40 @@ rng = np.random.default_rng()
 import graph_models as gm
 
 
-def plot_trajectories(index, beta, H_grid, low_to_high, high_to_low, hubs_low=[], hubs_high=[], name=r'\beta'):
-    plt.subplot(5, 2, 2 * index + 1)
+def plot_trajectories(index, max_index, beta, H_grid, low_to_high, high_to_low, hubs_low=[], hubs_high=[], name=r'\beta'):
+    hubs_low = np.array(hubs_low)
+    high_to_low, hubs_high = np.flip(high_to_low), np.flip(hubs_high)
+    left, right = np.argmax(high_to_low >= 0.5), np.argmax(np.array(low_to_high) >= 0.5)
+    diff = (left + right) // 2 - len(H_grid) // 2
+    step = H_grid[1] - H_grid[0]
+    if diff > 0:
+        H_grid = np.hstack((H_grid[diff:], np.linspace(H_grid[-1] + step, H_grid[-1] + step * diff, diff)))
+        low_to_high = np.hstack((low_to_high[diff:], [1] * diff))
+        high_to_low = np.hstack((high_to_low[diff:], [1] * diff))
+        hubs_low = np.hstack((hubs_low[diff:], [0] * diff))
+        hubs_high = np.hstack((hubs_high[diff:], [0] * diff))
+    elif diff < 0:
+        diff *= -1
+        H_grid = np.hstack((np.linspace(H_grid[0] - step * diff, H_grid[0] - step, diff), H_grid[:-diff]))
+        low_to_high = np.hstack(([0] * diff, low_to_high[:-diff]))
+        high_to_low = np.hstack(([0] * diff, high_to_low[:-diff]))
+        hubs_low = np.hstack(([0] * diff, hubs_low[:-diff]))
+        hubs_high = np.hstack(([0] * diff, hubs_high[:-diff]))
+        
+    left_hubs_line, right_hubs_line = np.argmax(hubs_low > 0), len(H_grid) - np.argmax(np.flip(hubs_low) > 0)
+    
+    plt.subplot(max_index, 2, 2 * index + 1)
     plt.plot(H_grid, low_to_high, label='при повышении H')
-    plt.plot(np.flip(H_grid), high_to_low, label='при снижении H')
+    plt.plot(H_grid, high_to_low, label='при снижении H')
     plt.grid(ls=':')
     plt.xlabel('H', fontsize='large')
     plt.title(r'Доля вершин с $\sigma_i = 1$, ${1} = {0}$'.format(round(beta, 3), name))
     
-    plt.subplot(5, 2, 2 * index + 2)
+    plt.subplot(max_index, 2, 2 * index + 2)
     plt.bar(np.arange(H_grid.size), hubs_low, width=5, label='при повышении H')
-    plt.xticks(np.linspace(0, H_grid.size, 6), np.linspace(-H_grid.max(), H_grid.max(), 6).round(2))
+    plt.plot([left_hubs_line - 3] * 2, [0, hubs_low.max()], linestyle='dashed', color='red')
+    plt.plot([right_hubs_line + 3] * 2, [0, hubs_low.max()], linestyle='dashed', color='green')
+    plt.xticks(np.linspace(0, H_grid.size, 6), np.linspace(H_grid.min(), H_grid.max(), 6).round(2))
     plt.grid(ls=':')
     plt.xlabel('H', fontsize='large')
     plt.title(r'Количество перевернувшихся вершин, ${1} = {0}$'.format(round(beta, 3), name))
@@ -36,7 +59,7 @@ def get_close_vector(v, alpha):
     unit /= np.linalg.norm(unit)
     orth = unit - np.dot(unit, v) * v
     orth /= np.linalg.norm(orth)
-    return alpha * v + (1 - alpha) * orth
+    return alpha * v + np.sqrt(1 - alpha ** 2) * orth
 
 
 
@@ -56,8 +79,8 @@ class RandomGraph:
         elif topology == 'circle':
             self.connections = gm.circle(self.N)
             return
-        elif topology == 'binary_tree':
-            self.connections = gm.binary_tree(self.N)
+        elif topology == 'cayley_tree':
+            self.connections = gm.cayley_tree(self.N)
             return
         elif topology == 'regular':
             # регулярный граф степени 3
@@ -154,10 +177,11 @@ class RandomGraph:
             current_state = next_state
             next_state = self.get_next_state(H, J)
         if log_hubs:
-            changed_hubs = np.sum(np.abs(initial_state - self.state)) / 2
-#             for i in range(self.N):
-#                 if initial_state[i] != self.state[i] and len(self.connections[i]) > threshold:
-#                     changed_hubs += 1
+            # changed_hubs = np.sum(np.abs(initial_state - self.state)) / 2
+            changed_hubs = 0
+            for i in range(self.N):
+                if initial_state[i] != self.state[i] and len(self.connections[i]) > threshold:
+                    changed_hubs += 1
             return self.state, changed_hubs
         return self.state
     
