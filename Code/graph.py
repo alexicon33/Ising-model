@@ -31,20 +31,21 @@ def plot_trajectories(index, max_index, beta, H_grid, low_to_high, high_to_low, 
     left_hubs_line, right_hubs_line = np.argmax(hubs_low > 0), len(H_grid) - np.argmax(np.flip(hubs_low) > 0)
     
     plt.subplot(max_index, 2, 2 * index + 1)
-    plt.plot(H_grid, low_to_high, label='при повышении H')
-    plt.plot(H_grid, high_to_low, label='при снижении H')
+    plt.plot(H_grid, low_to_high, label='increasing H')
+    plt.plot(H_grid, high_to_low, label='decreasing H')
     plt.grid(ls=':')
     plt.xlabel('H', fontsize='large')
-    plt.title(r'Доля вершин с $\sigma_i = 1$, ${1} = {0}$'.format(round(beta, 3), name))
+    plt.title(r'Percentage of vertices with $\sigma_i = 1$, ${1} = {0}$'.format(round(beta, 3), name))
+    plt.legend()
     
     plt.subplot(max_index, 2, 2 * index + 2)
-    plt.bar(np.arange(H_grid.size), hubs_low, width=5, label='при повышении H')
+    plt.bar(np.arange(H_grid.size), hubs_low, width=5, label='increasing H')
     plt.plot([left_hubs_line - 3] * 2, [0, hubs_low.max()], linestyle='dashed', color='red')
     plt.plot([right_hubs_line + 3] * 2, [0, hubs_low.max()], linestyle='dashed', color='green')
     plt.xticks(np.linspace(0, H_grid.size, 6), np.linspace(H_grid.min(), H_grid.max(), 6).round(2))
     plt.grid(ls=':')
     plt.xlabel('H', fontsize='large')
-    plt.title(r'Количество перевернувшихся вершин, ${1} = {0}$'.format(round(beta, 3), name))
+    plt.title(r'The number of switched vertices, ${1} = {0}$'.format(round(beta, 3), name))
     
 
 def get_close_vector(v, alpha):

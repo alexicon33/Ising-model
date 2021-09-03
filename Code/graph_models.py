@@ -19,15 +19,19 @@ def circle(N):
     return res
     
     
-def binary_tree(N):
+def cayley_tree(N):
     res = [[] for _ in range(N)]
-    for i in range(N):
-        if 2 * i + 1 < N:
-            res[i].append(2 * i + 1)
-            res[2 * i + 1].append(i)
+    res[0] += [1, 2, 3]
+    res[1].append(0)
+    res[2].append(0)
+    res[3].append(0)
+    for i in range(1, N):
         if 2 * i + 2 < N:
             res[i].append(2 * i + 2)
             res[2 * i + 2].append(i)
+        if 2 * i + 3 < N:
+            res[i].append(2 * i + 3)
+            res[2 * i + 3].append(i)
             
     return res
     
